@@ -3975,6 +3975,49 @@ Query_arena::Type Statement::type() const
 }
 
 
+/*
+  Return an internal database name:
+  - validated with Lex_ident_db::check_db_name()
+  - optionally converted to lower-case when lower_case_table_names==1
+
+  The lower-cased copy is made on mem_root when needed.
+  An error is raised in case of EOM or a bad database name.
+
+  @param src   - the database name
+  @returns     - {NULL,0} on EOM or a bad database name,
+                 or a good database name otherwise
+*/
+
+Lex_ident_db
+Query_arena::to_ident_db_internal_with_error(const LEX_CSTRING &src)
+{
+  DBUG_ASSERT(src.str);
+  if (src.str == any_db.str) // e.g. JSON table
+    return any_db; // preserve any_db - it has a special meaning
+
+  bool casedn= lower_case_table_names == 1;
+  const LEX_CSTRING tmp= casedn ? make_ident_casedn(src) : src;
+  if (!tmp.str /*EOM*/ ||
+      Lex_ident_fs(tmp).check_db_name_with_error())
+    return Lex_ident_db();
+
+  return Lex_ident_db(tmp.str, tmp.length);
+}
+
+
+Lex_ident_db
+Table_ident::to_ident_db_internal_with_error(Query_arena *arena) const
+{
+  if (is_derived_table())
+  {
+    DBUG_ASSERT(db.str == empty_c_string && db.length == 0);
+    return Lex_ident_db(empty_c_string, 0);
+  }
+  // Normal table or JSON table
+  return arena->to_ident_db_internal_with_error(db);
+}
+
+
 void Statement::set_statement(Statement *stmt)
 {
   id=             stmt->id;
