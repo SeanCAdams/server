@@ -942,6 +942,7 @@ public:
   bool is_view:1;
   bool describe:1; /* union exec() called for EXPLAIN */
   bool columns_are_renamed:1;
+  List<LEX_STRING>   *column_names; // list of column names
 
 protected:
   /* This is bool, not bit, as it's used and set in many places */

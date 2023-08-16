@@ -3277,3 +3277,103 @@ drop table t1,t2;
 #
 # End of 10.4 tests
 #
+#
+#     MDEV-31466 Implement column names for Table Value Expressions
+#
+select * from (values (3,4),(5,6)) as foo(Col1, Col2);
+Col1	Col2
+3	4
+5	6
+select Col1, Col2 from (values (3,4),(5,6)) as foo(Col1, Col2);
+Col1	Col2
+3	4
+5	6
+select concat(Col1,Col2) from (values (3,4),(5,6)) as foo(Col1, Col2);
+concat(Col1,Col2)
+34
+56
+select * from (select concat(col1, col2) as col from (values (3,4)) as foo(col1,col2)) as foo2;
+col
+34
+select outmost from
+(
+select outercol1, outercol2 from
+(
+select concat(col1, col2), 1 from
+(
+values (3,4)
+)
+as foo(col1,col2)
+)
+as foo2 ( outercol1, outercol2 )
+)
+foo3 (outmost, outmost1);
+outmost
+34
+create table t1 (c1 int, c2 int, c3 int);
+insert into t1 values (1,2,3),(4,5,6);
+create table t2 like t1;
+insert into t2 values (7,8,9),(10,11,12);
+create view v1 as select * from (select * from t1) as d1 (a1, a2, a3);
+create view v2 as select * from (select * from t2) as d2 (b1, b2, b3);
+select * from v1;
+a1	a2	a3
+1	2	3
+4	5	6
+select * from v2;
+b1	b2	b3
+7	8	9
+10	11	12
+select * from v1 union select * from v2;
+a1	a2	a3
+1	2	3
+4	5	6
+7	8	9
+10	11	12
+select * from
+(
+select c1, c2, c3 from t1
+)
+as d1 (a1, a2, a3)
+union
+select * from t2;
+a1	a2	a3
+1	2	3
+4	5	6
+7	8	9
+10	11	12
+insert into t2 values (1,2,3);
+select * from
+(
+select c1, c2, c3 from t1
+)
+as d1 (a1, a2, a3)
+intersect
+select * from t2;
+a1	a2	a3
+1	2	3
+prepare stmt from "select * from (select * from t1) as d1 (a1, a2, a3)";
+execute stmt;
+a1	a2	a3
+1	2	3
+4	5	6
+execute stmt;
+a1	a2	a3
+1	2	3
+4	5	6
+deallocate prepare stmt;
+prepare stmt from "select * from (select * from t1) as d1 (a1, a2, a3) union select * from (select * from t1) as d1 (na1, na2, na3)";
+execute stmt;
+a1	a2	a3
+1	2	3
+4	5	6
+execute stmt;
+a1	a2	a3
+1	2	3
+4	5	6
+deallocate prepare stmt;
+alter table t1 rename column c1 to cc1;
+select * from v1;
+ERROR HY000: View 'test.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+drop view v1, v2;
+drop table t1, t2;

@@ -2941,6 +2941,7 @@ void st_select_lex_unit::init_query()
   describe= 0;
   cloned_from= 0;
   columns_are_renamed= 0;
+  column_names= nullptr;
 }
 
 void st_select_lex::init_query()

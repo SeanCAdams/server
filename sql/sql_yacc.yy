@@ -8837,6 +8837,7 @@ subselect:
 subquery:
           query_expression_body_ext_parens %prec SUBQUERY_AS_EXPR
           {
+            Lex->column_list= nullptr;
             if (!$1->fake_select_lex)
               $1->first_select()->braces= false;
             else
@@ -8846,6 +8847,7 @@ subquery:
           }
         | '(' with_clause query_expression_no_with_clause ')'
           {
+            Lex->column_list= nullptr;
             $3->set_with_clause($2);
             $2->attach_to($3->first_select());
             if (!($$= Lex->parsed_subselect($3)))
@@ -11931,10 +11933,42 @@ table_primary_ident:
           }
         ;
 
+correlation_column_list:
+          ident 
+          {
+            LEX_STRING *i= (LEX_STRING*) thd->memdup(&$1, sizeof(LEX_STRING));
+            if (unlikely(i == nullptr) ||
+                unlikely(Lex->column_list->push_back(i, thd->mem_root)))
+              MYSQL_YYABORT;
+          }
+        | correlation_column_list ',' ident
+          {
+            LEX_STRING *i= (LEX_STRING*) thd->memdup(&$3, sizeof(LEX_STRING));
+            if (unlikely(i == nullptr) ||
+                unlikely(Lex->column_list->push_back(i, thd->mem_root)))
+              MYSQL_YYABORT;
+          }
+        ;
+
+opt_correlation_column_list:
+          /* empty */
+        | '('
+          { 
+            if (unlikely(
+                     !(Lex->column_list= new (thd->mem_root) List<LEX_STRING>)))
+              MYSQL_YYABORT;
+          }
+          correlation_column_list
+          ')'
+        ;
+
 table_primary_derived:
           subquery
-          opt_for_system_time_clause table_alias_clause
+          opt_for_system_time_clause
+          table_alias_clause
+          opt_correlation_column_list
           {
+            $1->master_unit()->column_names= Lex->column_list;
             if (!($$= Lex->parsed_derived_table($1->master_unit(), $2, $3)))
               MYSQL_YYABORT;
           }

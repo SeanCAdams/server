@@ -1526,6 +1526,23 @@ JOIN::prepare(TABLE_LIST *tables_init, COND *conds_init, uint og_num,
   if (setup_fields(thd, ref_ptrs, fields_list, select_lex->item_list_usage,
                    &all_fields, &select_lex->pre_fix, 1))
     DBUG_RETURN(-1);
+
+  if ( select_lex->master_unit()->column_names)
+  {
+    List<LEX_STRING> *cn= select_lex->master_unit()->column_names;
+    if (select_lex->item_list.elements != cn->elements)
+    {
+      my_error( ER_INCORRECT_COLUMN_NAME_COUNT, MYF(0) );
+      DBUG_RETURN(true);
+    }
+    List_iterator<LEX_STRING> si(*cn);
+    LEX_STRING *new_name;
+    List_iterator_fast<Item> it(select_lex->item_list);
+    Item *li;
+    while ((li= it++) && (new_name= si++))
+      lex_string_set(&li->name, new_name->str);
+  }
+
   thd->lex->current_select->context_analysis_place= save_place;
 
   if (setup_without_group(thd, ref_ptrs, tables_list,
@@ -30756,6 +30773,24 @@ void TABLE_LIST::print(THD *thd, table_map eliminated_tables, String *str,
       }
 
       append_identifier(thd, str, &t_alias);
+      /* are we derived and do we have a column name list? */
+      if (derived &&
+          derived->column_names &&
+          derived->column_names->elements > 0)
+      {
+        str->append('(');
+        List_iterator<LEX_STRING> si(*derived->column_names);
+        LEX_STRING *col_name;
+        bool first= true;
+        while ((col_name= si++))
+        {
+          if (!first)
+            str->append(',');
+          str->append(col_name);
+          first= false;
+        }
+        str->append(')');
+      }
     }
 
     if (index_hints)
