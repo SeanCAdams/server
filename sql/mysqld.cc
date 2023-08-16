@@ -8714,6 +8714,8 @@ static int get_options(int *argc_ptr, char ***argv_ptr)
   else
     log_error_file_ptr= const_cast<char*>("");
 
+  global_system_variables.redirect_url.length=
+    strlen(global_system_variables.redirect_url.str);
   opt_init_connect.length=strlen(opt_init_connect.str);
   opt_init_slave.length=strlen(opt_init_slave.str);
 

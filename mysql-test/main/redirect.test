@@ -1,0 +1,56 @@
+--echo #
+--echo # MDEV-15935 Connection Redirection Mechanism in MariaDB Client/Server Protocol
+--echo #
+
+set @old_redirect_url=@@redirect_url;
+select @@global.redirect_url;
+set global redirect_url=default;
+select @@global.redirect_url;
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mariadb.org";
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="https://mariadb.org";
+
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mysql://mariadb.org:";
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mysql://mariadb.org:hello";
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mysql://";
+set global redirect_url="mysql://mariadb.org";
+select @@global.redirect_url;
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mysql://mariadb.org:12a";
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mysql://mariadb.org:66666";
+set global redirect_url="mysql://mariadb.org:12345";
+select @@global.redirect_url;
+
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="maria";
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mariadb://mariadb.org:";
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mariadb://mariadb.org:hello";
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mariadb://";
+set global redirect_url="mariadb://mariadb.org";
+select @@global.redirect_url;
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mariadb://mariadb.org:12a";
+--error ER_WRONG_VALUE_FOR_VAR
+set global redirect_url="mariadb://mariadb.org:66666";
+set global redirect_url="mariadb://mariadb.org:12345";
+select @@global.redirect_url;
+
+select @@session.redirect_url;
+set session redirect_url=default;
+select @@session.redirect_url;
+set session redirect_url="mysql://localhost";
+select @@session.redirect_url;
+select @@global.redirect_url;
+set global redirect_url=@old_redirect_url;
+
+--echo #
+--echo # end of test MDEV-15935
+--echo #

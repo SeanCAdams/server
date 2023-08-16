@@ -1237,6 +1237,10 @@ void THD::init()
   ::strmake(default_master_connection_buff,
             global_system_variables.default_master_connection.str,
             variables.default_master_connection.length);
+  variables.redirect_url.str= redirect_url_buff;
+  ::strmake(redirect_url_buff,
+            global_system_variables.redirect_url.str,
+            global_system_variables.redirect_url.length);
   mysql_mutex_unlock(&LOCK_global_system_variables);
 
   user_time.val= start_time= start_time_sec_part= 0;

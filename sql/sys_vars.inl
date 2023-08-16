@@ -637,6 +637,129 @@ public:
   }
 };
 
+/**
+ Validate a redirect_url string.
+
+ A valid string is either empty, or of the format mysql://host[:port],
+ where host is an arbitrary string without any colon ':'.
+
+ @param  str    A string to validate
+ @param  len    Length of the string
+ @retval false  The string is valid
+ @retval true   The string is invalid
+*/
+static bool sysvar_validate_redirect_url(const char* str, size_t len)
+{
+  /* Empty string is valid */
+  if (len == 0)
+    return false;
+  const char* end= str + len;
+  if (!strncmp(str, "mysql://", strlen("mysql://")))
+    str+= strlen("mysql://");
+  else if (!strncmp(str, "mariadb://", strlen("mariadb://")))
+    str+= strlen("mariadb://");
+  else
+    return true;
+  /* Host name cannot be empty */
+  if (str == end)
+    return true;
+  /* Find the colon, if any */
+  while (str < end && *str != ':')
+    str++;
+  /* Found colon */
+  if (str < end)
+  {
+    /* Should have at least one number after the colon */
+    if (str + 1 == end)
+      return true;
+    int p= 0;
+    while (str < end && isdigit(*++str))
+      p= p * 10 + (*str - '0');
+    /* Should be all numbers after the colon */
+    if (str < end)
+      return true;
+    /* The port number should be between 0 and 65535 */
+    if (p > 65535)
+      return true;
+  }
+  return false;
+}
+
+class Sys_var_redirect_url: public Sys_var_charptr_base
+{
+  static const size_t max_length = MAX_CONNECTION_NAME;
+public:
+  Sys_var_redirect_url(const char *name_arg,
+                       const char *comment,
+                       CMD_LINE getopt,
+                       const char *def_val, PolyLock *lock= 0) :
+    Sys_var_charptr_base(name_arg, comment,
+                         SESSION_VAR(redirect_url),
+                         getopt, def_val, lock,
+                         VARIABLE_NOT_IN_BINLOG, 0, 0, 0)
+  {
+    global_var(LEX_CSTRING).length= strlen(def_val);
+    option.var_type|= GET_STR;
+    *const_cast<SHOW_TYPE*>(&show_val_type)= SHOW_LEX_STRING;
+  }
+
+  bool do_check(THD *thd, set_var *var) override
+  {
+    char buff[max_length];
+    String str(buff, sizeof(buff), system_charset_info), *res;
+
+    if (!(res=var->value->val_str(&str)))
+    {
+      var->save_result.string_value.str= 0;     /* NULL */
+      var->save_result.string_value.length= 0;
+    }
+    else
+    {
+      if (res->length() > max_length)
+      {
+        my_error(ER_WRONG_STRING_LENGTH, MYF(0),
+                 res->ptr(), name.str, (int) max_length);
+        return true;
+      }
+      if (sysvar_validate_redirect_url(res->ptr(), res->length()))
+        return true;
+      var->save_result.string_value.str= thd->strmake(res->ptr(),
+                                                      res->length());
+      var->save_result.string_value.length= res->length();
+    }
+    return false;
+  }
+
+  void session_save_default(THD *, set_var *var) override
+  {
+    char *ptr= (char*)(intptr)option.def_value;
+    var->save_result.string_value.str= ptr;
+    var->save_result.string_value.length= strlen(ptr);
+  }
+
+  void global_save_default(THD *, set_var *var) override
+  {
+    char *ptr= (char*)(intptr)option.def_value;
+    var->save_result.string_value.str= ptr;
+    var->save_result.string_value.length= strlen(ptr);
+  }
+
+  bool global_update(THD *thd, set_var *var) override
+  {
+    if (Sys_var_charptr_base::global_update(thd, var))
+      return true;
+    global_var(LEX_CSTRING).length= var->save_result.string_value.length;
+    return false;
+  }
+
+  bool session_update(THD *thd, set_var *var) override
+  {
+    LEX_CSTRING *tmp= &session_var(thd, LEX_CSTRING);
+    tmp->length= var->save_result.string_value.length;
+    strmake((char*) tmp->str, var->save_result.string_value.str, tmp->length);
+    return false;
+  }
+};
 
 #ifndef EMBEDDED_LIBRARY
 class Sys_var_sesvartrack: public Sys_var_charptr_base
