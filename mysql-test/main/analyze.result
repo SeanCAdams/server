@@ -71,3 +71,31 @@ optimize table t1 extended;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'extended' at line 1
 drop table t1;
 End of 5.0 tests
+#
+# MDEV-31957 Concurrent ALTER and ANALYZE collecting statistics can
+# result in stale statistical data
+#
+CREATE TABLE t1 (a INT, b VARCHAR(128));
+INSERT INTO t1 SELECT seq, CONCAT('s',seq) FROM seq_1_to_100;
+connect  con1,localhost,root,,;
+ALTER TABLE t1 MODIFY b BLOB;
+connection default;
+ANALYZE TABLE t1 PERSISTENT FOR ALL;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	Engine-independent statistics collected
+test.t1	analyze	status	OK
+connection con1;
+ANALYZE TABLE t1 PERSISTENT FOR ALL;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	Engine-independent statistics collected
+test.t1	analyze	Warning	Engine-independent statistics are not collected for column 'b'
+test.t1	analyze	status	OK
+connection default;
+disconnect con1;
+select db_name,table_name,column_name from mysql.column_stats;
+db_name	table_name	column_name
+test	t1	a
+drop table t1;
+#
+# End of 10.6 tests
+#

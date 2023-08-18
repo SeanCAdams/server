@@ -1,3 +1,5 @@
+--source include/have_sequence.inc
+
 #
 # Bug #10901 Analyze Table on new table destroys table
 # This is minimal test case to get error
@@ -87,3 +89,29 @@ optimize table t1 extended;
 drop table t1;
 
 --echo End of 5.0 tests
+
+--echo #
+--echo # MDEV-31957 Concurrent ALTER and ANALYZE collecting statistics can
+--echo # result in stale statistical data
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(128));
+INSERT INTO t1 SELECT seq, CONCAT('s',seq) FROM seq_1_to_100;
+
+--connect (con1,localhost,root,,)
+--send ALTER TABLE t1 MODIFY b BLOB
+
+--connection default
+ANALYZE TABLE t1 PERSISTENT FOR ALL;
+
+--connection con1
+--reap
+ANALYZE TABLE t1 PERSISTENT FOR ALL;
+--connection default
+--disconnect con1
+select db_name,table_name,column_name from mysql.column_stats;
+drop table t1;
+
+--echo #
+--echo # End of 10.6 tests
+--echo #

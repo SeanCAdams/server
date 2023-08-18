@@ -6447,7 +6447,9 @@ static bool fill_alter_inplace_info(THD *thd, TABLE *table, bool varchar,
 
           if (table->s->tmp_table == NO_TMP_TABLE)
           {
-            delete_statistics_for_column(thd, table, field);
+            if (alter_info->drop_stat_fields.push_back(field, thd->mem_root))
+              DBUG_RETURN(true);
+
             KEY *key_info= table->key_info;
             for (uint i= 0; i < table->s->keys; i++, key_info++)
             {
@@ -6459,9 +6461,10 @@ static bool fill_alter_inplace_info(THD *thd, TABLE *table, bool varchar,
               {
                 if (key_info->key_part[j].fieldnr - 1 == field->field_index)
                 {
-                  delete_statistics_for_index(
-                      thd, table, key_info,
-                      j >= key_info->user_defined_key_parts);
+                  if (alter_info->add_stat_drop_index(key_info,
+                                                      j >= key_info->user_defined_key_parts,
+                                                      thd->mem_root))
+                    DBUG_RETURN(true);
                   break;
                 }
               }
@@ -6523,8 +6526,10 @@ static bool fill_alter_inplace_info(THD *thd, TABLE *table, bool varchar,
       {
         field->flags|= FIELD_IS_RENAMED;
         ha_alter_info->handler_flags|= ALTER_COLUMN_NAME;
-        rename_column_in_stat_tables(thd, table, field,
-                                     new_field->field_name.str);
+        if (alter_info->add_stat_rename_field(field,
+                                              new_field->field_name.str,
+                                              thd->mem_root))
+          DBUG_RETURN(true);
       }
 
       /* Check that NULL behavior is same for old and new fields */
@@ -7483,6 +7488,8 @@ static bool mysql_inplace_alter_table(THD *thd,
     in case of crash it should use the new one and log the query
     to the binary log.
   */
+  ha_alter_info->alter_info->delete_statistics(thd, table);
+
   ddl_log_update_phase(ddl_log_state, DDL_ALTER_TABLE_PHASE_INPLACE_COPIED);
   debug_crash_here("ddl_log_alter_after_log");
 
@@ -7586,6 +7593,7 @@ static bool mysql_inplace_alter_table(THD *thd,
   }
   DBUG_RETURN(true);
 }
+
 
 /**
   maximum possible length for certain blob types.
@@ -7835,7 +7843,10 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         create_info->used_fields|=HA_CREATE_USED_AUTO;
       }
       if (table->s->tmp_table == NO_TMP_TABLE)
-        (void) delete_statistics_for_column(thd, table, field);
+      {
+        if (alter_info->drop_stat_fields.push_back(field, thd->mem_root))
+          DBUG_RETURN(true);
+      }
       dropped_sys_vers_fields|= field->flags;
       drop_it.remove();
       dropped_fields= &table->tmp_set;
@@ -7853,7 +7864,10 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         alter_info->flags & ALTER_DROP_SYSTEM_VERSIONING)
     {
       if (table->s->tmp_table == NO_TMP_TABLE)
-        (void) delete_statistics_for_column(thd, table, field);
+      {
+        if (alter_info->drop_stat_fields.push_back(field, thd->mem_root))
+          DBUG_RETURN(true);
+      }
       continue;
     }
 
@@ -8216,19 +8230,24 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     {
       if (table->s->tmp_table == NO_TMP_TABLE)
       {
-        (void) delete_statistics_for_index(thd, table, key_info, FALSE);
+        if (alter_info->add_stat_drop_index(key_info, FALSE, thd->mem_root))
+          DBUG_RETURN(true);
         if (primary_key)
 	{
           KEY *tab_key_info= table->key_info;
 	  for (uint j=0; j < table->s->keys; j++, tab_key_info++)
 	  {
-            if (tab_key_info->user_defined_key_parts !=
+            if (tab_key_info != key_info &&
+                tab_key_info->user_defined_key_parts !=
                 tab_key_info->ext_key_parts)
-	      (void) delete_statistics_for_index(thd, table, tab_key_info,
-                                                 TRUE);
-	  }
+            {
+              if (alter_info->add_stat_drop_index(tab_key_info, TRUE,
+                                                  thd->mem_root))
+                DBUG_RETURN(true);
+            }
+          }
 	}
-      }  
+      }
       drop_it.remove();
       continue;
     }
@@ -8376,10 +8395,17 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     if (table->s->tmp_table == NO_TMP_TABLE)
     {
       if (delete_index_stat) 
-        (void) delete_statistics_for_index(thd, table, key_info, FALSE);
+      {
+        if (alter_info->add_stat_drop_index(key_info, FALSE, thd->mem_root))
+          DBUG_RETURN(true);
+      }
       else if (alter_ctx->modified_primary_key &&
                key_info->user_defined_key_parts != key_info->ext_key_parts)
-        (void) delete_statistics_for_index(thd, table, key_info, TRUE);
+      {
+        if (alter_info->add_stat_drop_index(key_info, FALSE,
+                                               thd->mem_root))
+          DBUG_RETURN(true);
+      }
     }
 
     if (!user_keyparts && key_parts.elements)
@@ -10665,6 +10691,9 @@ do_continue:;
 
   if (wait_while_table_is_used(thd, table, HA_EXTRA_PREPARE_FOR_RENAME))
     goto err_new_table_cleanup;
+
+  /* Now we are the only user. Remove the statistics */
+  alter_info->delete_statistics(thd, table);
 
   close_all_tables_for_name(thd, table->s,
                             alter_ctx.is_table_renamed() ?

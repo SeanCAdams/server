@@ -109,6 +109,48 @@ public:
   List<const char>              partition_names;
   // Number of partitions.
   uint                          num_parts;
+
+  /* List of fields that we should delete statistics from */
+  List<Field> drop_stat_fields;
+
+  /* List of index that we should delete statistics from */
+  struct KEY_DROP_STAT_PARAMS
+  {
+    KEY *key;
+    bool flag;
+  };
+  List<KEY_DROP_STAT_PARAMS> drop_stat_indexes;
+
+  struct RENAME_STAT_PARAMS
+  {
+    Field *field;
+    const char *name;
+  };
+  List<RENAME_STAT_PARAMS> rename_stat_fields;
+
+  bool add_stat_drop_index(KEY *key, bool flag, MEM_ROOT *mem_root)
+  {
+    KEY_DROP_STAT_PARAMS *param;
+    if (!(param= (KEY_DROP_STAT_PARAMS*) alloc_root(mem_root, sizeof(*param))))
+      return true;
+    param->key=  key;
+    param->flag= flag;
+    return drop_stat_indexes.push_back(param, mem_root);
+  }
+
+  bool add_stat_rename_field(Field *field, const char *name, MEM_ROOT *mem_root)
+  {
+    RENAME_STAT_PARAMS *param;
+    if (!(param= (RENAME_STAT_PARAMS*) alloc_root(mem_root, sizeof(*param))))
+      return true;
+    param->field= field;
+    param->name=  name;
+    return rename_stat_fields.push_back(param, mem_root);
+  }
+
+  /* Delete based on drop_stat_fields and drop_stat_indexes */
+  void delete_statistics(THD *thd, TABLE *table);
+
 private:
   // Type of ALTER TABLE algorithm.
   enum_alter_table_algorithm    requested_algorithm;
@@ -135,6 +177,9 @@ public:
     create_list.empty();
     alter_index_ignorability_list.empty();
     check_constraint_list.empty();
+    drop_stat_fields.empty();
+    drop_stat_indexes.empty();
+    rename_stat_fields.empty();
     flags= 0;
     partition_flags= 0;
     keys_onoff= LEAVE_AS_IS;
