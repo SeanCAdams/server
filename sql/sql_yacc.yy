@@ -1713,8 +1713,8 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
         repair analyze opt_with_admin opt_with_admin_option
         analyze_table_list analyze_table_elem_spec
         opt_persistent_stat_clause persistent_stat_spec
-        persistent_column_stat_spec persistent_index_stat_spec
-        table_column_list table_index_list table_index_name
+        persistent_index_stat_spec
+        table_index_list table_index_name
         check start checksum opt_returning
         field_list field_list_item kill key_def constraint_def
         keycache_list keycache_list_or_parts assign_to_keycache
@@ -1855,8 +1855,10 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 
 %type <ident_sys_list>
         comma_separated_ident_list
-        opt_with_column_list
-        with_column_list
+        opt_comma_separated_ident_list
+        opt_table_column_list
+        opt_table_opt_column_list
+        persistent_column_stat_spec
         opt_cycle
 
 %type <vers_range_unit> opt_history_unit
@@ -8126,23 +8128,17 @@ persistent_stat_spec:
           ALL
           {}
         | COLUMNS persistent_column_stat_spec INDEXES persistent_index_stat_spec
-          {}
+          {
+            Lex->column_list= $2;
+          }
         ;
 
 persistent_column_stat_spec:
-          ALL {}
-        | '('
-          { 
-            LEX* lex= thd->lex;
-            lex->column_list= new (thd->mem_root) List<LEX_STRING>;
-            if (unlikely(lex->column_list == NULL))
-              MYSQL_YYABORT;
-          }
-          table_column_list
-          ')' 
-          { }
+          ALL
+          { $$= nullptr; }
+        | opt_table_opt_column_list
         ;
- 
+
 persistent_index_stat_spec:
           ALL {}
         | '('
@@ -8155,21 +8151,6 @@ persistent_index_stat_spec:
           table_index_list
           ')' 
           { }
-        ;
-
-table_column_list:
-          /* empty */
-          {}
-        | ident 
-          {
-            Lex->column_list->push_back((LEX_STRING*)
-                thd->memdup(&$1, sizeof(LEX_STRING)), thd->mem_root);
-          }
-        | table_column_list ',' ident
-          {
-            Lex->column_list->push_back((LEX_STRING*)
-                thd->memdup(&$3, sizeof(LEX_STRING)), thd->mem_root);
-          }
         ;
 
 table_index_list:
@@ -11933,8 +11914,11 @@ table_primary_ident:
 
 table_primary_derived:
           subquery
-          opt_for_system_time_clause table_alias_clause
+          opt_for_system_time_clause
+          table_alias_clause
+          opt_table_column_list
           {
+            $1->master_unit()->column_names= $4;
             if (!($$= Lex->parsed_derived_table($1->master_unit(), $2, $3)))
               MYSQL_YYABORT;
           }
@@ -15202,7 +15186,7 @@ with_list:
 
 with_list_element:
           with_element_head
-	  opt_with_column_list 
+	  opt_table_column_list 
           AS '(' query_expression ')' opt_cycle
  	  {
             LEX *lex= thd->lex;
@@ -15240,19 +15224,24 @@ opt_cycle:
          }
          ;
 
-
-opt_with_column_list:
+opt_table_column_list:
           /* empty */
           {
-            if (($$= new (thd->mem_root) List<Lex_ident_sys>) == NULL)
+            if (($$= new (thd->mem_root) List<Lex_ident_sys>) == nullptr)
               MYSQL_YYABORT;
           }
-        | '(' with_column_list ')'
+        | '(' comma_separated_ident_list ')'
           { $$= $2; }
         ;
 
-with_column_list:
-          comma_separated_ident_list
+opt_table_opt_column_list:
+          /* empty */
+          {
+            if (($$= new (thd->mem_root) List<Lex_ident_sys>) == nullptr)
+              MYSQL_YYABORT;
+          }
+        | '(' opt_comma_separated_ident_list ')'
+          { $$= $2; }
         ;
 
 ident_sys_alloc:
@@ -15263,6 +15252,15 @@ ident_sys_alloc:
               MYSQL_YYABORT;
             $$= new (buf) Lex_ident_sys(thd, &$1);
           }
+        ;
+
+opt_comma_separated_ident_list:
+          /* empty */
+          {
+            if (($$= new (thd->mem_root) List<Lex_ident_sys>) == nullptr)
+              MYSQL_YYABORT;
+          }
+        | comma_separated_ident_list
         ;
 
 comma_separated_ident_list:

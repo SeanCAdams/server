@@ -936,8 +936,8 @@ static bool mysql_admin_table(THD* thd, TABLE_LIST* tables,
         else
         {
           int pos;
-          LEX_STRING *column_name;
-          List_iterator_fast<LEX_STRING> it(*lex->column_list);
+          Lex_ident_sys *column_name;
+          List_iterator_fast<Lex_ident_sys> it(*lex->column_list);
 
           bitmap_clear_all(tab->read_set);
           while ((column_name= it++))

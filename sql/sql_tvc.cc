@@ -281,15 +281,43 @@ bool table_value_constr::prepare(THD *thd, SELECT_LEX *sl,
   arena=thd->activate_stmt_arena_if_needed(&backup);
   
   sl->item_list.empty();
-  for (uint pos= 0; (item= it++); pos++)
+
+  /*  Do we have a list of supplied column names? */
+  if ( sl->master_unit()->column_names &&
+      (sl->master_unit()->column_names->elements > 0))
   {
-    /* Error's in 'new' will be detected after loop */
-    Item_type_holder *new_holder= new (thd->mem_root)
-                      Item_type_holder(thd, item, holders[pos].type_handler(),
-                                       &holders[pos]/*Type_all_attributes*/,
-                                       holders[pos].get_maybe_null());
-    sl->item_list.push_back(new_holder);
+    if (sl->master_unit()->column_names->elements != cnt)
+    {
+      my_error(ER_INCORRECT_COLUMN_NAME_COUNT, MYF(0));
+      DBUG_RETURN(true);
+    }
+    List_iterator<Lex_ident_sys> si(*sl->master_unit()->column_names);
+    Lex_ident_sys *new_name;
+    for (uint pos= 0; (item= it++) && (new_name= si++); pos++)
+    {
+      Item_type_holder *new_holder= new (thd->mem_root)
+                        Item_type_holder(thd, item,
+                                         holders[pos].type_handler(),
+                                         &holders[pos],
+                                         holders[pos].get_maybe_null());
+      lex_string_set(&new_holder->name, new_name->str);
+      sl->item_list.push_back(new_holder);
+    }
   }
+  else
+  {
+    for (uint pos= 0; (item= it++); pos++)
+    {
+      /* Error's in 'new' will be detected after loop */
+      Item_type_holder *new_holder= new (thd->mem_root)
+                        Item_type_holder(thd, item, holders[pos].type_handler(),
+                                         &holders[pos]/*Type_all_attributes*/,
+                                         holders[pos].get_maybe_null());
+
+      sl->item_list.push_back(new_holder);
+    }
+  }
+
   if (arena)
     thd->restore_active_arena(arena, &backup);
   

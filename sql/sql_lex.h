@@ -943,6 +943,7 @@ public:
   bool is_view:1;
   bool describe:1; /* union exec() called for EXPLAIN */
   bool columns_are_renamed:1;
+  List<Lex_ident_sys>   *column_names; // list of column names
 
 protected:
   /* This is bool, not bit, as it's used and set in many places */
@@ -3342,7 +3343,7 @@ public:
   List<Item_func_set_user_var> set_var_list; // in-query assignment list
   List<Item_param>    param_list;
   List<LEX_CSTRING>   view_list; // view list (list of field names in view)
-  List<LEX_STRING>   *column_list; // list of column names (in ANALYZE)
+  List<Lex_ident_sys>   *column_list; // list of column names (in ANALYZE)
   List<LEX_STRING>   *index_list;  // list of index names (in ANALYZE)
   /*
     A stack of name resolution contexts for the query. This stack is used
