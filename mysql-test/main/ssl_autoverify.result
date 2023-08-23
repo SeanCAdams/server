@@ -1,3 +1,12 @@
+show variables like 'ssl%';
+Variable_name	Value
+ssl_ca	MYSQL_TEST_DIR/std_data/cacert.pem
+ssl_capath	
+ssl_cert	MYSQL_TEST_DIR/std_data/server-cert.pem
+ssl_cipher	
+ssl_crl	
+ssl_crlpath	
+ssl_key	MYSQL_TEST_DIR/std_data/server-key.pem
 install soname 'auth_ed25519';
 install plugin three_attempts soname 'dialog_examples';
 create user native@'%' identified via mysql_native_password using password('foo');

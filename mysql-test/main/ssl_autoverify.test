@@ -7,6 +7,9 @@ if (!$DIALOG_EXAMPLES_SO) {
   skip No dialog_examples plugin;
 }
 
+--replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR
+show variables like 'ssl%';
+
 install soname 'auth_ed25519';
 install plugin three_attempts soname 'dialog_examples';
 
