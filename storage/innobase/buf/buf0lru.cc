@@ -1346,6 +1346,29 @@ bool buf_LRU_scan_and_free_block(ulint limit)
     buf_LRU_free_from_common_LRU_list(limit);
 }
 
+void buf_LRU_evict_temp(uint32_t threshold)
+{
+  mysql_mutex_lock(&buf_pool.mutex);
+  for (buf_page_t* bpage = UT_LIST_GET_FIRST(buf_pool.LRU);
+       bpage != NULL;
+       bpage = UT_LIST_GET_NEXT(LRU, bpage))
+  {
+    if (bpage->id().space() != SRV_TMP_SPACE_ID
+        || bpage->id().page_no() < threshold)
+      continue;
+
+#ifdef UNIV_DEBUG
+    if (bpage->lock.u_lock_try(true))
+    {
+      ut_ad(bpage->state() == buf_page_t::FREED);
+      bpage->lock.u_unlock(true);
+    }
+#endif /* UNIV_DEBUG */
+    buf_LRU_free_page(bpage, true);
+  }
+  mysql_mutex_unlock(&buf_pool.mutex);
+}
+
 #ifdef UNIV_DEBUG
 /** Validate the LRU list. */
 void buf_LRU_validate()
