@@ -11052,9 +11052,12 @@ copy_data_between_tables(THD *thd, TABLE *from, TABLE *to,
 
   from->file->info(HA_STATUS_VARIABLE);
   to->file->extra(HA_EXTRA_PREPARE_FOR_ALTER_TABLE);
-  to->file->ha_start_bulk_insert(from->file->stats.records,
-                                 ignore ? 0 : HA_CREATE_UNIQUE_INDEX_BY_SORT);
-  bulk_insert_started= 1;
+  if (!to->s->long_unique_table)
+  {
+    to->file->ha_start_bulk_insert(from->file->stats.records,
+                                   ignore ? 0 : HA_CREATE_UNIQUE_INDEX_BY_SORT);
+    bulk_insert_started= 1;
+  }
   mysql_stage_set_work_estimated(thd->m_stage_progress_psi, from->file->stats.records);
 
   List_iterator<Create_field> it(create);
@@ -11319,7 +11322,7 @@ copy_data_between_tables(THD *thd, TABLE *from, TABLE *to,
     /* We are going to drop the temporary table */
     to->file->extra(HA_EXTRA_PREPARE_FOR_DROP);
   }
-  if (unlikely(to->file->ha_end_bulk_insert()) && error <= 0)
+  if (bulk_insert_started && to->file->ha_end_bulk_insert() && error <= 0)
   {
     /* Give error, if not already given */
     if (!thd->is_error())
@@ -11361,7 +11364,6 @@ copy_data_between_tables(THD *thd, TABLE *from, TABLE *to,
   {
     /* This happens if we get an error during initialization of data */
     DBUG_ASSERT(error);
-    to->file->ha_end_bulk_insert();
     ha_enable_transaction(thd, TRUE);
   }
 
