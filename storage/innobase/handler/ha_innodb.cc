@@ -4038,7 +4038,6 @@ static void innobase_update_optimizer_costs(OPTIMIZER_COSTS *costs)
   costs->row_copy_cost=      0.00006087;
 }
 
-
 /** Initialize the InnoDB storage engine plugin.
 @param[in,out]	p	InnoDB handlerton
 @return error code
