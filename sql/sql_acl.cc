@@ -186,7 +186,7 @@ public:
   enum SSL_type ssl_type;
   uint password_errors;
   const char *ssl_cipher, *x509_issuer, *x509_subject;
-  LEX_CSTRING default_rolename;
+  Lex_ident default_rolename;
   struct AUTH { LEX_CSTRING plugin, auth_string, salt; } *auth;
   uint nauth;
   bool account_locked;
@@ -12102,19 +12102,14 @@ applicable_roles_insert(ACL_USER_BASE *grantee, ACL_ROLE *role, void *ptr)
     find_role_grant_pair(&grantee->user, host, &role->user);
   DBUG_ASSERT(pair);
 
-  if (pair->with_admin)
-    table->field[2]->store(STRING_WITH_LEN("YES"), cs);
-  else
-    table->field[2]->store(STRING_WITH_LEN("NO"), cs);
+  table->field[2]->store_yesno(pair->with_admin, cs);
 
   /* Default role is only valid when looking at a role granted to a user. */
   if (!is_role)
   {
-    if (data->user->default_rolename.length &&
-        lex_string_eq(&data->user->default_rolename, &role->user))
-      table->field[3]->store(STRING_WITH_LEN("YES"), cs);
-    else
-      table->field[3]->store(STRING_WITH_LEN("NO"), cs);
+    table->field[3]->store_yesno(data->user->default_rolename &&
+                                 data->user->default_rolename.streq(role->user),
+                                 cs);
     table->field[3]->set_notnull();
   }
 
