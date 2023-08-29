@@ -1,0 +1,19 @@
+--- main/ssl_autoverify.result	2023-08-29 12:35:03.333277482 +0200
++++ main/ssl_autoverify.reject	2023-08-29 12:41:35.608298099 +0200
+@@ -35,16 +35,6 @@
+ # mysql -umulti -ppw2 --ssl-verify-server-cert -e "select test.have_ssl()"
+ test.have_ssl()
+ yes
+->> MitM active <<
+-# mysql -uroot --disable-ssl-verify-server-cert -e "select 'Detecting MitM' as MitM, test.have_ssl()"
+-MitM	test.have_ssl()
+-No MitM found!	yes
+->> MitM active <<
+-# mysql -unative -pfoo --ssl-verify-server-cert -e "select 'Detecting MitM', test.have_ssl()"
+-ERROR 2026 (HY000): TLS/SSL error: Failed to verify the server certificate
+->> MitM active <<
+-# mysql -ued -pbar --ssl-verify-server-cert -e "select 'Detecting MitM', test.have_ssl()"
+-ERROR 2026 (HY000): TLS/SSL error: Failed to verify the server certificate
+ drop function have_ssl;
+ drop user native@'%';
+ drop user ed@'%';
