@@ -328,6 +328,7 @@ static MYSQL* client_connect(ulong flag, uint protocol, my_bool auto_reconnect)
   MYSQL* mysql;
   int  rc;
   static char query[MAX_TEST_QUERY_LENGTH];
+  my_bool no= 0;
   myheader_r("client_connect");
 
   if (!opt_silent)
@@ -343,6 +344,7 @@ static MYSQL* client_connect(ulong flag, uint protocol, my_bool auto_reconnect)
   /* enable local infile, in non-binary builds often disabled by default */
   mysql_options(mysql, MYSQL_OPT_LOCAL_INFILE, 0);
   mysql_options(mysql, MYSQL_OPT_PROTOCOL, &protocol);
+  mysql_options(mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, &no);
   if (opt_plugin_dir && *opt_plugin_dir)
     mysql_options(mysql, MYSQL_PLUGIN_DIR, opt_plugin_dir);
 
@@ -1227,6 +1229,8 @@ static struct my_option client_test_long_options[] =
   {"socket", 'S', "Socket file to use for connection",
    &opt_unix_socket, &opt_unix_socket, 0, GET_STR,
    REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"ssl-verify-server-cert", 0, "for compatibility only, the value is ignored",
+    0, 0, 0, GET_BOOL, OPT_ARG, 0, 0, 0, 0, 0, 0},
   {"testcase", 'c',
    "May disable some code when runs as mysql-test-run testcase.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
