@@ -75,6 +75,19 @@ a	b
 connection master_1;
 DELETE FROM tbl_a;
 DROP TABLE tbl_a;
+# read only
+connection master_1;
+CREATE TABLE tbl_a (
+a INT,
+b VARCHAR(255),
+PRIMARY KEY(a)
+) ENGINE=Spider DEFAULT CHARSET=utf8
+REMOTE_SERVER="s_2_1" REMOTE_TABLE="tbl_a" READ_ONLY=1;
+INSERT INTO tbl_a VALUES (1, "aaa"), (2, "bbb"), (3, "ccc"), (4, "ddd");
+ERROR HY000: Table 'auto_test_local.tbl_a' is read only
+SELECT * FROM tbl_a;
+a	b
+DROP TABLE tbl_a;
 # Multiple data nodes with partition options
 connection master_1;
 CREATE TABLE tbl_a (
@@ -95,6 +108,14 @@ a	b
 4	ddd
 DELETE FROM tbl_a;
 DROP TABLE tbl_a;
+connection master_1;
+CREATE TABLE tbl_a (
+a INT,
+b VARCHAR(255),
+PRIMARY KEY(a)
+) ENGINE=Spider DEFAULT CHARSET=utf8
+REMOTE_SERVER="s_2_1" REMOTE_TABLE="tbl_a" READ_ONLY=maybe;
+ERROR HY000: The table option READ_ONLY=maybe is invalid
 # Multiple data nodes with table options + partition options
 connection master_1;
 CREATE TABLE tbl_a (
@@ -122,7 +143,7 @@ a	b
 connection master_1;
 DELETE FROM tbl_a;
 DROP TABLE tbl_a;
-# COMMENT + engine-defined option
+# COMMENT + engine-defined option, COMMENT ignored, invalid (missing table name)
 connection master_1;
 CREATE TABLE tbl_a (
 a INT,
@@ -135,80 +156,72 @@ PARTITION p1 VALUES LESS THAN (3) COMMENT='srv "s_2_1"',
 PARTITION p2 VALUES LESS THAN MAXVALUE REMOTE_SERVER="s_2_2"
 );
 INSERT INTO tbl_a VALUES (1, "aaa"), (2, "bbb"), (3, "ccc"), (4, "ddd");
-SELECT * FROM tbl_a;
-a	b
-1	aaa
-2	bbb
-3	ccc
-4	ddd
+ERROR HY000: Remote table 'auto_test_remote2.tbl_a#P#p2' is not found
+connection master_1;
+DROP TABLE tbl_a;
+# COMMENT + engine-defined option, COMMENT ignored, ok
+connection master_1;
+CREATE TABLE tbl_a (
+a INT,
+b VARCHAR(255),
+PRIMARY KEY(a)
+) ENGINE=Spider DEFAULT CHARSET=utf8
+REMOTE_SERVER="s_2_1" REMOTE_TABLE="tbl_a"
+PARTITION BY RANGE (a) (
+PARTITION p1 VALUES LESS THAN (3) COMMENT='srv "s_2_2"',
+PARTITION p2 VALUES LESS THAN MAXVALUE REMOTE_SERVER="s_2_2"
+);
+INSERT INTO tbl_a VALUES (1, "aaa"), (2, "bbb"), (3, "ccc"), (4, "ddd");
 connection child2_1;
 SELECT * FROM tbl_a;
 a	b
 1	aaa
 2	bbb
+connection child2_2;
+SELECT * FROM tbl_a;
+a	b
+3	ccc
+4	ddd
 connection master_1;
 DELETE FROM tbl_a;
 DROP TABLE tbl_a;
-# COMMENT + engine-defined option (invalid)
+# COMMENT + engine-defined option, COMMENT ignored, ok
 connection master_1;
 CREATE TABLE tbl_a (
 a INT,
 b VARCHAR(255),
 PRIMARY KEY(a)
 ) ENGINE=Spider DEFAULT CHARSET=utf8
-REMOTE_SERVER="s_2_1" REMOTE_TABLE="tbl_a" COMMENT='tbl "tbl_b"';
-ERROR HY000: Can't create table `auto_test_local`.`tbl_a` (errno: 12501 "Unknown error 12501")
-CREATE TABLE tbl_a (
-a INT,
-b VARCHAR(255),
-PRIMARY KEY(a)
-) ENGINE=Spider DEFAULT CHARSET=utf8
-COMMENT='srv "s_2_1"' REMOTE_TABLE="tbl_a"
+REMOTE_SERVER="s_2_1" REMOTE_TABLE="tbl_a" READ_ONLY=YES
 PARTITION BY RANGE (a) (
-PARTITION p1 VALUES LESS THAN (3),
-PARTITION p2 VALUES LESS THAN MAXVALUE REMOTE_SERVER="s_2_2"
+PARTITION p1 VALUES LESS THAN (3) COMMENT='srv "s_2_2" read_only_mode "0"',
+PARTITION p2 VALUES LESS THAN MAXVALUE REMOTE_SERVER="s_2_2" READ_ONLY=NO
 );
-ERROR HY000: Can't create table `auto_test_local`.`tbl_a` (errno: 12501 "Unknown error 12501")
-# Various combinations of COMMENTs and options
-CREATE TABLE tbl_a (
-a INT,
-b VARCHAR(255),
-PRIMARY KEY(a)
-) ENGINE=Spider DEFAULT CHARSET=utf8
-REMOTE_SERVER="s_2_1" REMOTE_DATABASE="auto_test_remote" REMOTE_TABLE="tbl_a";
+INSERT INTO tbl_a VALUES (1, "aaa"), (2, "bbb");
+ERROR HY000: Table 'auto_test_local.tbl_a' is read only
+INSERT INTO tbl_a VALUES (3, "ccc"), (4, "ddd");
+connection child2_1;
 SELECT * FROM tbl_a;
 a	b
+connection child2_2;
+SELECT * FROM tbl_a;
+a	b
+3	ccc
+4	ddd
+DELETE FROM tbl_a;
+connection master_1;
 DROP TABLE tbl_a;
+connection master_1;
 CREATE TABLE tbl_a (
 a INT,
 b VARCHAR(255),
 PRIMARY KEY(a)
 ) ENGINE=Spider DEFAULT CHARSET=utf8
-REMOTE_TABLE="tbl_a"
-PARTITION BY RANGE (a) (
-PARTITION p1 VALUES LESS THAN (3)
-REMOTE_SERVER="s_2_1" COMMENT='database "auto_test_remote"',
-PARTITION p2 VALUES LESS THAN MAXVALUE
-REMOTE_SERVER="s_2_2" REMOTE_DATABASE="auto_test_remote2"
-);
-SELECT * FROM tbl_a;
-a	b
-DROP TABLE tbl_a;
-CREATE TABLE tbl_a (
-a INT,
-b VARCHAR(255),
-PRIMARY KEY(a)
-) ENGINE=Spider DEFAULT CHARSET=utf8
-COMMENT='tbl "tbl_a"'
-PARTITION BY RANGE (a) (
-PARTITION p1 VALUES LESS THAN (3)
-REMOTE_SERVER="s_2_1" REMOTE_DATABASE="auto_test_remote",
-PARTITION p2 VALUES LESS THAN MAXVALUE
-REMOTE_SERVER="s_2_2" REMOTE_DATABASE="auto_test_remote2"
-);
-SELECT * FROM tbl_a;
-a	b
-DROP TABLE tbl_a;
+REMOTE_SERVER="s_2_1" COMMENT='tbl "tbl_b"' REMOTE_TABLE="tbl_a";
+select table_name, server, tgt_table_name from mysql.spider_tables;
+table_name	server	tgt_table_name
+tbl_a	s_2_1	tbl_a
+drop table tbl_a;
 CREATE TABLE tbl_a (
 a INT
 ) ENGINE=Spider DEFAULT CHARSET=utf8
